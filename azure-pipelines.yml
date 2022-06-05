@@ -1,0 +1,52 @@
+trigger:
+  - main
+
+pool:
+  vmImage: ubuntu-latest
+
+stages:
+  - stage: build
+    jobs:
+      - job: compile_test
+  - stage: dev
+    dependsOn: build
+    jobs:
+      - job: iac
+      - job: deploy_contracts
+        dependsOn: iac
+      - job: deploy_frontend
+        dependsOn:
+          - iac
+          - deploy_contracts
+  - stage: dev_validation
+    dependsOn: dev
+    jobs:
+      - job: wait_for_dev_validation
+      - job: delete_dev
+        dependsOn: wait_for_dev_validation
+  - stage: qa
+    dependsOn: dev_validation
+    jobs:
+      - job: iac
+      - job: deploy_contracts
+        dependsOn: iac
+      - job: deploy_frontend
+        dependsOn:
+          - iac
+          - deploy_contracts
+  - stage: qa_validation
+    dependsOn: qa
+    jobs:
+      - job: wait_for_qa_validation
+      - job: delete_qa
+        dependsOn: wait_for_qa_validation
+  - stage: prod
+    dependsOn: qa_validation
+    jobs:
+      - job: iac
+      - job: deploy_contracts
+        dependsOn: iac
+      - job: deploy_frontend
+        dependsOn:
+          - iac
+          - deploy_contracts
