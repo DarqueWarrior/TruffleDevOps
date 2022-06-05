@@ -8,5 +8,11 @@ module.exports = {
     develop: {
       port: 8545
     }
+  },
+  mocha: {
+    reporter: 'xunit',
+    reporterOptions: {
+      output: 'TEST-results.xml'
+    }
   }
 };
