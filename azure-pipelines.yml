@@ -1,5 +1,5 @@
 trigger:
-  - main
+  - blog/part4
 
 pool:
   vmImage: ubuntu-latest
