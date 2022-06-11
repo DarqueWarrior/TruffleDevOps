@@ -1,2 +1,2 @@
 TEST-results.xml
-node_modules
+**/node_modules/
