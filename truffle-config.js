@@ -1,4 +1,3 @@
-const { config } = require("dotenv");
 const path = require("path");
 require('dotenv').config();
 var devNetworkHost = process.env["DEV_NETWORK"];
