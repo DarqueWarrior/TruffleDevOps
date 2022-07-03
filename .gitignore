@@ -1,2 +1,3 @@
 TEST-results.xml
 **/node_modules/
+**/.env
