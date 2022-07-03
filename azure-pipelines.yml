@@ -8,6 +8,20 @@ stages:
   - stage: build
     jobs:
       - job: compile_test
+        steps:
+          - script: npm install
+            displayName: "Install Truffle"
+          - script: npx truffle compile
+            displayName: "Compile contracts"
+          - script: npx truffle test
+            displayName: "Test contracts"
+          - task: PublishTestResults@2
+            displayName: "Publish contract test results"
+            inputs:
+              testRunTitle: "Contract"
+              testResultsFormat: "JUnit"
+              failTaskOnFailedTests: true
+              testResultsFiles: "**/TEST-*.xml"      
   - stage: dev
     dependsOn: build
     jobs:
