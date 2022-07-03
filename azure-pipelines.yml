@@ -74,6 +74,28 @@ stages:
               targetPath: "$(System.DefaultWorkingDirectory)/client/build"
               artifact: "client"
               publishLocation: "pipeline"
+          - script: npm install
+            displayName: "Install API dependencies"
+            workingDirectory: $(System.DefaultWorkingDirectory)/api
+          - script: npm test -- --reporters=default --reporters=jest-junit
+            displayName: "Test API"
+            workingDirectory: $(System.DefaultWorkingDirectory)/api
+            env:
+              CI: true
+              networkAddress_4: "0x7a063c7e4A0EC2fB4dC0F73103Fd45F17b46Ae52"
+          - task: PublishTestResults@2
+            displayName: "Publish API test results"
+            inputs:
+              testRunTitle: "API"
+              testResultsFormat: "JUnit"
+              failTaskOnFailedTests: true
+              testResultsFiles: "api/junit*.xml"
+          - task: PublishPipelineArtifact@1
+            displayName: "Publish API"
+            inputs:
+              targetPath: "$(System.DefaultWorkingDirectory)/api"
+              artifact: "api"
+              publishLocation: "pipeline"
   - stage: dev
     dependsOn: build
     jobs:
