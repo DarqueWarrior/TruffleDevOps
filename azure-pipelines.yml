@@ -49,7 +49,31 @@ stages:
             inputs:
               targetPath: "$(Build.ArtifactStagingDirectory)/contracts"
               artifact: "contracts"
-              publishLocation: "pipeline"                    
+              publishLocation: "pipeline"
+          - script: npm install
+            displayName: "Install client dependencies"
+            workingDirectory: $(System.DefaultWorkingDirectory)/client
+          - script: npm run build
+            displayName: "Build client"
+            workingDirectory: $(System.DefaultWorkingDirectory)/client
+          - script: npm test -- --reporters=default --reporters=jest-junit
+            displayName: "Test client"
+            workingDirectory: $(System.DefaultWorkingDirectory)/client
+            env:
+              CI: true
+          - task: PublishTestResults@2
+            displayName: "Publish client test results"
+            inputs:
+              testRunTitle: "Client"
+              testResultsFormat: "JUnit"
+              failTaskOnFailedTests: true
+              testResultsFiles: "client/junit*.xml"
+          - task: PublishPipelineArtifact@1
+            displayName: "Publish client"
+            inputs:
+              targetPath: "$(System.DefaultWorkingDirectory)/client/build"
+              artifact: "client"
+              publishLocation: "pipeline"
   - stage: dev
     dependsOn: build
     jobs:
