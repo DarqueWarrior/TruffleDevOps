@@ -3,7 +3,7 @@ trigger:
 
 pool:
   vmImage: ubuntu-latest
-  
+
 stages:
   - stage: build
     jobs:
@@ -21,7 +21,35 @@ stages:
               testRunTitle: "Contract"
               testResultsFormat: "JUnit"
               failTaskOnFailedTests: true
-              testResultsFiles: "**/TEST-*.xml"      
+              testResultsFiles: "**/TEST-*.xml"
+          - task: CopyFiles@2
+            displayName: "Package tests"
+            inputs:
+              Contents: |
+                $(System.DefaultWorkingDirectory)/test/**
+                package.json
+              TargetFolder: "$(Build.ArtifactStagingDirectory)/tests"
+          - task: PublishPipelineArtifact@1
+            displayName: "Publish contract tests"
+            inputs:
+              targetPath: "$(Build.ArtifactStagingDirectory)/tests"
+              artifact: "tests"
+              publishLocation: "pipeline"
+          - task: CopyFiles@2
+            displayName: "Package contracts"
+            inputs:
+              Contents: |
+                $(System.DefaultWorkingDirectory)/package.json
+                $(System.DefaultWorkingDirectory)/migrations/**
+                $(System.DefaultWorkingDirectory)/truffle-config.js
+                $(System.DefaultWorkingDirectory)/client/src/contracts/**
+              TargetFolder: "$(Build.ArtifactStagingDirectory)/contracts"
+          - task: PublishPipelineArtifact@1
+            displayName: "Publish contracts"
+            inputs:
+              targetPath: "$(Build.ArtifactStagingDirectory)/contracts"
+              artifact: "contracts"
+              publishLocation: "pipeline"                    
   - stage: dev
     dependsOn: build
     jobs:
@@ -64,4 +92,3 @@ stages:
         dependsOn:
           - iac
           - deploy_contracts
-            
