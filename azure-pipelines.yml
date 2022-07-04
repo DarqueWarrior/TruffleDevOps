@@ -4,6 +4,10 @@ trigger:
 pool:
   vmImage: ubuntu-latest
 
+variables:
+  - name: resourceGroup
+    value: Web3DevOps
+
 stages:
   - stage: build
     jobs:
@@ -111,6 +115,26 @@ stages:
     dependsOn: build
     jobs:
       - job: iac
+        steps:
+          - checkout: none
+          - download: none
+
+          - task: DownloadPipelineArtifact@2
+            displayName: "Download IaC artifacts"
+            inputs:
+              buildType: "current"
+              artifact: "iac"
+              targetPath: "$(Pipeline.Workspace)/iac"
+          - task: AzureCLI@2
+            name: "deploy"
+            displayName: "Deploy Infra"
+            inputs:
+              azureSubscription: "Web3DevOps"
+              scriptType: "pscore"
+              scriptLocation: "scriptPath"
+              scriptPath: "$(Agent.BuildDirectory)/iac/deploy.ps1"
+              arguments: "-repoUrl $(Build.Repository.Uri) -rgName $(resourceGroup)-dev -fqdn $(resourceGroup)-dev -deployGanache -verbose"    
+              workingDirectory: "$(Agent.BuildDirectory)/iac"
       - job: deploy_contracts
         dependsOn: iac
       - job: deploy_frontend
