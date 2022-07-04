@@ -2,7 +2,7 @@
 param (
     [Parameter(Position = 0)]
     [string]
-    $rgName = "TruffleSample_dev",
+    $rgName = "Web3DevOps_dev",
 
     [Parameter(Position = 1)]
     [string]
@@ -11,8 +11,14 @@ param (
     [string]
     $repoUrl,
 
+    [string]
+    $fqdn,
+
     [switch]
-    $deployGanache
+    $deployGanache,
+
+    [int]
+    $chainId = 1385
 )
 
 Write-Verbose $repoUrl
@@ -20,13 +26,17 @@ Write-Verbose $repoUrl
 Write-Output 'Deploying the Azure infrastructure'
 Write-Output "Deploy Ganache: $($deployGanache.IsPresent)"
 
+$useGanache = $($deployGanache.IsPresent.ToString())
+
 $deployment = $(az deployment sub create --name $rgName `
                 --location $location `
                 --template-file ./main.bicep `
+                --parameters fqdn=$fqdn `
+                --parameters chainId=$chainId `
                 --parameters location=$location `
                 --parameters rgName=$rgName `
                 --parameters repoUrl=$repoUrl `
-                --parameters deployGanache=$($deployGanache.IsPresent.ToString()) `
+                --parameters deployGanache=$useGanache `
                 --output json) | ConvertFrom-Json
 
 # Store the outputs from the deployment
