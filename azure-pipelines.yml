@@ -96,6 +96,17 @@ stages:
               targetPath: "$(System.DefaultWorkingDirectory)/api"
               artifact: "api"
               publishLocation: "pipeline"
+          - task: CopyFiles@2
+            displayName: "Package IaC"
+            inputs:
+              Contents: $(System.DefaultWorkingDirectory)/iac/**
+              TargetFolder: "$(Build.ArtifactStagingDirectory)"
+          - task: PublishPipelineArtifact@1
+            displayName: "Publish IaC"
+            inputs:
+              targetPath: "$(Build.ArtifactStagingDirectory)/iac"
+              artifact: "iac"
+              publishLocation: "pipeline"        
   - stage: dev
     dependsOn: build
     jobs:
