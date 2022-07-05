@@ -74,6 +74,12 @@ stages:
               targetPath: "$(System.DefaultWorkingDirectory)/client/build"
               artifact: "client"
               publishLocation: "pipeline"
+          - task: PublishPipelineArtifact@1
+            displayName: Publish API
+            inputs:
+              targetPath: "$(System.DefaultWorkingDirectory)/api"
+              artifact: "api"
+              publishLocation: "pipeline"
           - script: npm install
             displayName: "Install API dependencies"
             workingDirectory: $(System.DefaultWorkingDirectory)/api
@@ -90,12 +96,6 @@ stages:
               testResultsFormat: "JUnit"
               failTaskOnFailedTests: true
               testResultsFiles: "api/junit*.xml"
-          - task: PublishPipelineArtifact@1
-            displayName: "Publish API"
-            inputs:
-              targetPath: "$(System.DefaultWorkingDirectory)/api"
-              artifact: "api"
-              publishLocation: "pipeline"
   - stage: dev
     dependsOn: build
     jobs:
