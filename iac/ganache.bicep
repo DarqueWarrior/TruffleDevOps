@@ -52,4 +52,5 @@ resource ganache 'Microsoft.ContainerInstance/containerGroups@2021-10-01' = {
   }
 }
 
+output ganacheName string = ganache.name
 output ganacheIp string = ganache.properties.ipAddress.ip
