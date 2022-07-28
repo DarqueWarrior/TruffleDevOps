@@ -45,8 +45,14 @@ $deploymentToken = $deployment.properties.outputs.deploymentToken.value
 
 if ($deployGanache.IsPresent) {
     $ganacheIp = $deployment.properties.outputs.ganacheIp.value
-    Write-Host "The IP of Ganache is $ganacheIp"
+    $ganacheName = $deployment.properties.outputs.ganacheName.value
+    $ganacheFqdn = $deployment.properties.outputs.ganacheFqdn.value
+
+    Write-Host "The IP of Ganache is http://$($ganacheIp):8545"
+    Write-Host "The FQDN of Ganache is http://$($deployment.properties.outputs.ganacheFqdn.value):8545"
     Write-Host "##vso[task.setvariable variable=ganacheIp;isOutput=true]$ganacheIp"
+    Write-Host "##vso[task.setvariable variable=ganacheName;isOutput=true]$ganacheName"
+    Write-Host "##vso[task.setvariable variable=ganacheFqdn;isOutput=true]$ganacheFqdn"
 }
 
 # Write the values as output so they can be used in other stages.
