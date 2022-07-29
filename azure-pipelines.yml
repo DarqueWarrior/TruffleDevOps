@@ -283,8 +283,26 @@ stages:
     dependsOn: dev
     jobs:
       - job: wait_for_dev_validation
+        displayName: "Wait for external validation"
+        pool: server
+        timeoutInMinutes: 1440 # job times out in 1 day
+        steps:
+          - task: ManualValidation@0
+            timeoutInMinutes: 1440 # task times out in 1 day
+            inputs:
+              notifyUsers: $(Build.RequestedForEmail)
+              instructions: Use the App URL on the Extensions tab and validate the recent changes to your dApp and click resume.
+              onTimeout: reject
       - job: delete_dev
         dependsOn: wait_for_dev_validation
+        steps:
+          - task: AzureCLI@2
+            displayName: "Delete Dev resource group"
+            inputs:
+              azureSubscription: "Web3DevOps"
+              scriptType: "pscore"
+              scriptLocation: "inlineScript"
+              inlineScript: "az group delete --name $(resourceGroup)-dev --yes --no-wait"
   - stage: qa
     dependsOn: dev_validation
     jobs:
