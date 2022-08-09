@@ -373,6 +373,65 @@ stages:
         dependsOn:
           - iac
           - deploy_contracts
+        variables:
+          # map the output variable from build stage into this job
+          swaName: $[ dependencies.IaC.outputs['deploy.swaName'] ]
+          deploymentToken: $[ dependencies.IaC.outputs['deploy.deploymentToken'] ]
+          networkId: $[ dependencies.Deploy_Contracts.outputs['contract.networkId'] ]
+          contractAddress: $[ dependencies.Deploy_Contracts.outputs['contract.contractAddress'] ]
+
+        steps:
+          - checkout: none
+          - download: none
+
+          - task: DownloadPipelineArtifact@2
+            displayName: Download artifacts
+
+          - task: AzureStaticWebApp@0
+            displayName: Deploy frontend
+            inputs:
+              api_location: api
+              app_location: client
+              skip_app_build: true
+              workingDirectory: $(Pipeline.Workspace)
+              azure_static_web_apps_api_token: $(deploymentToken)
+
+          - task: AzureCLI@2
+            displayName: Configure API
+            inputs:
+              azureSubscription: "Web3DevOps"
+              scriptType: "pscore"
+              scriptLocation: "inlineScript"
+              inlineScript: "az staticwebapp appsettings set --name $(swaName) --setting-names networkAddress=$(contractAddress) networkAddress_$(networkId)=$(contractAddress)"
+          - task: AzureCLI@2
+            displayName: "Update summary"
+            inputs:
+              azureSubscription: "Web3DevOps"
+              scriptType: "pscore"
+              scriptLocation: "inlineScript"
+              inlineScript: |
+                dir env: | Out-String
+                
+                Write-Host "resourceGroup: $(resourceGroup)"
+
+                $summaryPath = "$(Agent.BuildDirectory)/contracts/QA_Contract_Information.md"
+                $swaUrl = $env:AZURESTATICWEBAPP_STATIC_WEB_APP_URL
+                Write-Host "Writing summary to $summaryPath"
+
+                $data = @"
+                ### SPA Information
+                App URL: [$swaUrl]($swaUrl)
+
+                ### Contract Information
+                Network ID: $(networkId)
+                Contract Address: $(contractAddress)
+                "@
+
+                Set-Content -Path $summaryPath -Value $data -Verbose
+                $cmd = '[task.addattachment type=Distributedtask.Core.Summary;name=dApp Information;]'
+
+                Write-Host "##vso$cmd$summaryPath"
+  
   - stage: qa_validation
     dependsOn: qa
     jobs:
