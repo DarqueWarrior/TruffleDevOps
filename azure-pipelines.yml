@@ -275,7 +275,7 @@ stages:
                 "@
 
                 Set-Content -Path $summaryPath -Value $data -Verbose
-                $cmd = '[task.addattachment type=Distributedtask.Core.Summary;name=dApp Information;]'
+                $cmd = '[task.addattachment type=Distributedtask.Core.Summary;name=dApp Information (Dev);]'
 
                 Write-Host "##vso$cmd$summaryPath"
                 
@@ -293,16 +293,16 @@ stages:
               notifyUsers: $(Build.RequestedForEmail)
               instructions: Use the App URL on the Extensions tab and validate the recent changes to your dApp and click resume.
               onTimeout: reject
-      - job: delete_dev
-        dependsOn: wait_for_dev_validation
-        steps:
-          - task: AzureCLI@2
-            displayName: "Delete Dev resource group"
-            inputs:
-              azureSubscription: "Web3DevOps"
-              scriptType: "pscore"
-              scriptLocation: "inlineScript"
-              inlineScript: "az group delete --name $(resourceGroup)-dev --yes --no-wait"
+      # - job: delete_dev
+      #   dependsOn: wait_for_dev_validation
+      #   steps:
+      #     - task: AzureCLI@2
+      #       displayName: "Delete Dev resource group"
+      #       inputs:
+      #         azureSubscription: "Web3DevOps"
+      #         scriptType: "pscore"
+      #         scriptLocation: "inlineScript"
+      #         inlineScript: "az group delete --name $(resourceGroup)-dev --yes --no-wait"
   - stage: qa
     dependsOn: dev_validation
     jobs:
@@ -428,7 +428,7 @@ stages:
                 "@
 
                 Set-Content -Path $summaryPath -Value $data -Verbose
-                $cmd = '[task.addattachment type=Distributedtask.Core.Summary;name=dApp Information;]'
+                $cmd = '[task.addattachment type=Distributedtask.Core.Summary;name=dApp Information (QA);]'
 
                 Write-Host "##vso$cmd$summaryPath"
   
