@@ -35,3 +35,4 @@ output swaName string = web3swa.outputs.swaName
 output deploymentToken string = web3swa.outputs.deploymentToken
 output ganacheIp string = (deployGanache) ? ganache.outputs.ganacheIp : ''
 output ganacheName string = (deployGanache) ? ganache.outputs.ganacheName : ''
+output ganacheFqdn string = (deployGanache) ? ganache.outputs.ganacheFqdn : ''
