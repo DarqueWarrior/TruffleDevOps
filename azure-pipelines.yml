@@ -307,8 +307,68 @@ stages:
     dependsOn: dev_validation
     jobs:
       - job: iac
+        steps:
+          - checkout: none
+          - download: none
+
+          - task: DownloadPipelineArtifact@2
+            displayName: "Download IaC artifacts"
+            inputs:
+              buildType: "current"
+              artifact: "iac"
+              targetPath: "$(Pipeline.Workspace)/iac"
+          - task: AzureCLI@2
+            name: "deploy"
+            displayName: "Deploy Infra"
+            inputs:
+              azureSubscription: "Web3DevOps"
+              scriptType: "pscore"
+              scriptLocation: "scriptPath"
+              scriptPath: "$(Agent.BuildDirectory)/iac/deploy.ps1"
+              arguments: "-repoUrl $(Build.Repository.Uri) -rgName $(resourceGroup)-qa -fqdn '' -verbose"
+              workingDirectory: "$(Agent.BuildDirectory)/iac"
       - job: deploy_contracts
         dependsOn: iac
+        steps:
+          - checkout: none
+          - download: none
+
+          - task: DownloadPipelineArtifact@2
+            displayName: Download artifacts
+
+          - script: npm install
+            displayName: "Install Truffle"
+            workingDirectory: $(Agent.BuildDirectory)/contracts
+
+          - script: "npx truffle migrate --network rinkeby --reset --compile-none"
+            displayName: Deploy contracts
+            workingDirectory: $(Agent.BuildDirectory)/contracts
+            env:
+              NEMONIC: $(NEMONIC)
+              API_KEY: $(API_KEY)
+
+          - pwsh: |
+              # Load the contract JSON that should have a single network property
+              # after the contract migration above
+              $contract = Get-Content ./client/src/contracts/SimpleStorage.json | ConvertFrom-Json
+              
+              # The networkId is the name of the only property in the networks object
+              $networkId = $contract.networks[0] | Get-Member -MemberType NoteProperty | Select-Object -ExpandProperty name
+
+              # Get the address property
+              $address = $contract.networks.$networkId.address
+
+              if($address) {
+                Write-Host "##[section]Contract address: $address"
+              } else {
+                Write-Host "##vso[task.logissue type=error]Address not found"
+              }
+
+              Write-Host "##vso[task.setvariable variable=networkId;isOutput=true]$networkId"
+              Write-Host "##vso[task.setvariable variable=contractAddress;isOutput=true]$address"
+            displayName: Find contract address
+            name: contract
+            workingDirectory: $(Agent.BuildDirectory)/contracts
       - job: deploy_frontend
         dependsOn:
           - iac
