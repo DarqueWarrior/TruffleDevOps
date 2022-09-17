@@ -344,7 +344,7 @@ stages:
             displayName: Deploy contracts
             workingDirectory: $(Agent.BuildDirectory)/contracts
             env:
-              NEMONIC: $(NEMONIC)
+              MNEMONIC: $(MNEMONIC)
               API_KEY: $(API_KEY)
 
           - pwsh: |
