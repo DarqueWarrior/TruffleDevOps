@@ -2,7 +2,7 @@ const path = require("path");
 require('dotenv').config();
 var devNetworkHost = process.env["DEV_NETWORK"];
 var apiKey = process.env["API_KEY"];
-var mnemonic = process.env["NEMONIC"];
+var mnemonic = process.env["MNEMONIC"];
 var HDWalletProvider = require("truffle-hdwallet-provider");
 
 config = {
