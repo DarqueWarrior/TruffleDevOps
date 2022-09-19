@@ -110,359 +110,362 @@ stages:
             inputs:
               targetPath: "$(Build.ArtifactStagingDirectory)/iac"
               artifact: "iac"
-              publishLocation: "pipeline"        
-  - stage: dev
-    condition: false
-    dependsOn: build
-    jobs:
-      - job: iac
-        steps:
-          - checkout: none
-          - download: none
+              publishLocation: "pipeline"
 
-          - task: DownloadPipelineArtifact@2
-            displayName: "Download IaC artifacts"
-            inputs:
-              buildType: "current"
-              artifact: "iac"
-              targetPath: "$(Pipeline.Workspace)/iac"
-          - task: AzureCLI@2
-            name: "deploy"
-            displayName: "Deploy Infra"
-            inputs:
-              azureSubscription: "Web3DevOps"
-              scriptType: "pscore"
-              scriptLocation: "scriptPath"
-              scriptPath: "$(Agent.BuildDirectory)/iac/deploy.ps1"
-              arguments: "-repoUrl $(Build.Repository.Uri) -rgName $(resourceGroup)-dev -fqdn $(resourceGroup)-dev -deployGanache -verbose"    
-              workingDirectory: "$(Agent.BuildDirectory)/iac"
-      - job: deploy_contracts
-        dependsOn: iac
-        variables:
-          # map the output variable from build stage into this job
-          ganacheIp: $[ dependencies.IaC.outputs['deploy.ganacheIp'] ]
-          ganacheName: $[ dependencies.IaC.outputs['deploy.ganacheName'] ]
-        steps:
-          - checkout: none
-          - download: none
-          
-          - task: DownloadPipelineArtifact@2
-            displayName: "Download artifacts"
-          - script: npm install
-            displayName: "Install Truffle"
-            workingDirectory: "$(Agent.BuildDirectory)/contracts"
-          # Before deploying the contracts restart the container. If you don't
-          # the same container could be running for days and the logs will no
-          # longer have the accounts and private keys in them.
-          - task: AzureCLI@2
-            displayName: "Restart Ganache"
-            inputs:
-              azureSubscription: "Web3DevOps"
-              scriptType: "pscore"
-              scriptLocation: "inlineScript"
-              inlineScript: |
-                Write-Host "ganacheName: $(ganacheName)"
-                Write-Host "resourceGroup: $(resourceGroup)"
-                az container restart --resource-group $(resourceGroup)-dev --name $(ganacheName)
-          - script: "npx truffle migrate --network development --reset --compile-none"
-            displayName: "Deploy contracts"
-            workingDirectory: "$(Agent.BuildDirectory)/contracts"
-            env:
-              DEV_NETWORK: $(ganacheIp)
-          - pwsh: |
-              # Load the contract JSON that should have a single network property
-              # after the contract migration above
-              $contract = Get-Content ./client/src/contracts/SimpleStorage.json | ConvertFrom-Json
-              
-              # The networkId is the name of the only property in the networks object
-              $networkId = $contract.networks[0] | Get-Member -MemberType NoteProperty | Select-Object -ExpandProperty name
+  # - stage: dev
+  #   condition: false
+  #   dependsOn: build
+  #   jobs:
+  #     - job: iac
+  #       steps:
+  #         - checkout: none
+  #         - download: none
 
-              # Get the address property
-              $address = $contract.networks.$networkId.address
+  #         - task: DownloadPipelineArtifact@2
+  #           displayName: "Download IaC artifacts"
+  #           inputs:
+  #             buildType: "current"
+  #             artifact: "iac"
+  #             targetPath: "$(Pipeline.Workspace)/iac"
+  #         - task: AzureCLI@2
+  #           name: "deploy"
+  #           displayName: "Deploy Infra"
+  #           inputs:
+  #             azureSubscription: "Web3DevOps"
+  #             scriptType: "pscore"
+  #             scriptLocation: "scriptPath"
+  #             scriptPath: "$(Agent.BuildDirectory)/iac/deploy.ps1"
+  #             arguments: "-repoUrl $(Build.Repository.Uri) -rgName $(resourceGroup)-dev -fqdn $(resourceGroup)-dev -deployGanache -verbose"
+  #             workingDirectory: "$(Agent.BuildDirectory)/iac"
+  #     - job: deploy_contracts
+  #       dependsOn: iac
+  #       variables:
+  #         # map the output variable from build stage into this job
+  #         ganacheIp: $[ dependencies.IaC.outputs['deploy.ganacheIp'] ]
+  #         ganacheName: $[ dependencies.IaC.outputs['deploy.ganacheName'] ]
+  #       steps:
+  #         - checkout: none
+  #         - download: none
 
-              if($address) {
-                Write-Host "##[section]Contract address: $address"
-              } else {
-                Write-Host "##vso[task.logissue type=error]Address not found"
-              }
+  #         - task: DownloadPipelineArtifact@2
+  #           displayName: "Download artifacts"
+  #         - script: npm install
+  #           displayName: "Install Truffle"
+  #           workingDirectory: "$(Agent.BuildDirectory)/contracts"
+  #         # Before deploying the contracts restart the container. If you don't
+  #         # the same container could be running for days and the logs will no
+  #         # longer have the accounts and private keys in them.
+  #         - task: AzureCLI@2
+  #           displayName: "Restart Ganache"
+  #           inputs:
+  #             azureSubscription: "Web3DevOps"
+  #             scriptType: "pscore"
+  #             scriptLocation: "inlineScript"
+  #             inlineScript: |
+  #               Write-Host "ganacheName: $(ganacheName)"
+  #               Write-Host "resourceGroup: $(resourceGroup)"
+  #               az container restart --resource-group $(resourceGroup)-dev --name $(ganacheName)
+  #         - script: "npx truffle migrate --network development --reset --compile-none"
+  #           displayName: "Deploy contracts"
+  #           workingDirectory: "$(Agent.BuildDirectory)/contracts"
+  #           env:
+  #             DEV_NETWORK: $(ganacheIp)
+  #         - pwsh: |
+  #             # Load the contract JSON that should have a single network property
+  #             # after the contract migration above
+  #             $contract = Get-Content ./client/src/contracts/SimpleStorage.json | ConvertFrom-Json
 
-              Write-Host "##vso[task.setvariable variable=networkId;isOutput=true]$networkId"
-              Write-Host "##vso[task.setvariable variable=contractAddress;isOutput=true]$address"
-            displayName: "Find contract address"
-            name: "Contract"
-            workingDirectory: "$(Agent.BuildDirectory)/contracts"
-              
-      - job: deploy_frontend
-        dependsOn:
-          - iac
-          - deploy_contracts
-        variables:
-          # map the output variable from build stage into this job
-          swaName: $[ dependencies.IaC.outputs['deploy.swaName'] ]
-          ganacheIp: $[ dependencies.IaC.outputs['deploy.ganacheIp'] ]
-          ganacheFqdn: $[ dependencies.IaC.outputs['deploy.ganacheFqdn'] ]
-          ganacheName: $[ dependencies.IaC.outputs['deploy.ganacheName'] ]
-          deploymentToken: $[ dependencies.IaC.outputs['deploy.deploymentToken'] ]
-          networkId: $[ dependencies.Deploy_Contracts.outputs['contract.networkId'] ]
-          contractAddress: $[ dependencies.Deploy_Contracts.outputs['contract.contractAddress'] ]
-          
-        steps:
-          - checkout: none
-          - download: none
-          
-          - task: DownloadPipelineArtifact@2
-            displayName: "Download artifacts"
+  #             # The networkId is the name of the only property in the networks object
+  #             $networkId = $contract.networks[0] | Get-Member -MemberType NoteProperty | Select-Object -ExpandProperty name
 
-          - task: AzureStaticWebApp@0
-            displayName: "Deploy frontend"
-            inputs:
-              api_location: api
-              app_location: client
-              skip_app_build: true
-              workingDirectory: $(Pipeline.Workspace)
-              azure_static_web_apps_api_token: $(deploymentToken)
-          - task: AzureCLI@2
-            displayName: "Configure API"
-            inputs:
-              azureSubscription: "Web3DevOps"
-              scriptType: "pscore"
-              scriptLocation: "inlineScript"
-              inlineScript: |
-                az staticwebapp appsettings set --name $(swaName) `
-                  --setting-names networkAddress=$(contractAddress) `
-                  networkAddress_$(networkId)=$(contractAddress)
-          - task: AzureCLI@2
-            displayName: "Update summary"
-            inputs:
-              azureSubscription: "Web3DevOps"
-              scriptType: "pscore"
-              scriptLocation: "inlineScript"
-              inlineScript: |
-                dir env: | Out-String
-                
-                Write-Host "ganacheIp: $(ganacheIp)"
-                Write-Host "ganacheFqdn: $(ganacheFqdn)"
-                Write-Host "ganacheName: $(ganacheName)"
-                Write-Host "resourceGroup: $(resourceGroup)"
+  #             # Get the address property
+  #             $address = $contract.networks.$networkId.address
 
-                $logs = az container logs --container ganache `
-                  --resource-group $(resourceGroup)-dev `
-                  --name $(ganacheName)
+  #             if($address) {
+  #               Write-Host "##[section]Contract address: $address"
+  #             } else {
+  #               Write-Host "##vso[task.logissue type=error]Address not found"
+  #             }
 
-                Write-Host "logs: $logs"
-                # Get first address
-                $address = ($logs | Select-String '\(0\) ([^\(]+) \(').Matches.Groups[1].Value
-                
-                # Get first private key
-                $key = ($logs | Select-String '\(0\) ([^\(]{64,})').Matches.Groups[1].Value
+  #             Write-Host "##vso[task.setvariable variable=networkId;isOutput=true]$networkId"
+  #             Write-Host "##vso[task.setvariable variable=contractAddress;isOutput=true]$address"
+  #           displayName: "Find contract address"
+  #           name: "Contract"
+  #           workingDirectory: "$(Agent.BuildDirectory)/contracts"
 
-                $summaryPath = "$(Agent.BuildDirectory)/contracts/Contract_Information.md"
-                $swaUrl = $env:AZURESTATICWEBAPP_STATIC_WEB_APP_URL
-                Write-Host "Writing summary to $summaryPath"
+  #     - job: deploy_frontend
+  #       dependsOn:
+  #         - iac
+  #         - deploy_contracts
+  #       variables:
+  #         # map the output variable from build stage into this job
+  #         swaName: $[ dependencies.IaC.outputs['deploy.swaName'] ]
+  #         ganacheIp: $[ dependencies.IaC.outputs['deploy.ganacheIp'] ]
+  #         ganacheFqdn: $[ dependencies.IaC.outputs['deploy.ganacheFqdn'] ]
+  #         ganacheName: $[ dependencies.IaC.outputs['deploy.ganacheName'] ]
+  #         deploymentToken: $[ dependencies.IaC.outputs['deploy.deploymentToken'] ]
+  #         networkId: $[ dependencies.Deploy_Contracts.outputs['contract.networkId'] ]
+  #         contractAddress: $[ dependencies.Deploy_Contracts.outputs['contract.contractAddress'] ]
 
-                $data = @"
-                ### SPA Information
-                App URL: [$swaUrl]($swaUrl)
+  #       steps:
+  #         - checkout: none
+  #         - download: none
 
-                ### Contract Information
-                Ganache IP: [http://$(ganacheIp):8545](http://$(ganacheIp):8545)
-                Ganache FQDN: [http://$(ganacheFqdn):8545](http://$(ganacheFqdn):8545)
-                Network ID: $(networkId)
-                Contract Address: $(contractAddress)
+  #         - task: DownloadPipelineArtifact@2
+  #           displayName: "Download artifacts"
 
-                ### Account Information
-                Address: $address
-                Private Key: $key
-                "@
+  #         - task: AzureStaticWebApp@0
+  #           displayName: "Deploy frontend"
+  #           inputs:
+  #             api_location: api
+  #             app_location: client
+  #             skip_app_build: true
+  #             workingDirectory: $(Pipeline.Workspace)
+  #             azure_static_web_apps_api_token: $(deploymentToken)
+  #         - task: AzureCLI@2
+  #           displayName: "Configure API"
+  #           inputs:
+  #             azureSubscription: "Web3DevOps"
+  #             scriptType: "pscore"
+  #             scriptLocation: "inlineScript"
+  #             inlineScript: |
+  #               az staticwebapp appsettings set --name $(swaName) `
+  #                 --setting-names networkAddress=$(contractAddress) `
+  #                 networkAddress_$(networkId)=$(contractAddress)
+  #         - task: AzureCLI@2
+  #           displayName: "Update summary"
+  #           inputs:
+  #             azureSubscription: "Web3DevOps"
+  #             scriptType: "pscore"
+  #             scriptLocation: "inlineScript"
+  #             inlineScript: |
+  #               dir env: | Out-String
 
-                Set-Content -Path $summaryPath -Value $data -Verbose
-                $cmd = '[task.addattachment type=Distributedtask.Core.Summary;name=dApp Information (Dev);]'
+  #               Write-Host "ganacheIp: $(ganacheIp)"
+  #               Write-Host "ganacheFqdn: $(ganacheFqdn)"
+  #               Write-Host "ganacheName: $(ganacheName)"
+  #               Write-Host "resourceGroup: $(resourceGroup)"
 
-                Write-Host "##vso$cmd$summaryPath"
-                
-  - stage: dev_validation
-    condition: false
-    dependsOn: dev
-    jobs:
-      - job: wait_for_dev_validation
-        displayName: "Wait for external validation"
-        pool: server
-        timeoutInMinutes: 1440 # job times out in 1 day
-        steps:
-          - task: ManualValidation@0
-            timeoutInMinutes: 1440 # task times out in 1 day
-            inputs:
-              notifyUsers: $(Build.RequestedForEmail)
-              instructions: Use the App URL on the Extensions tab and validate the recent changes to your dApp and click resume.
-              onTimeout: reject
-      - job: delete_dev
-        dependsOn: wait_for_dev_validation
-        steps:
-          - task: AzureCLI@2
-            displayName: "Delete Dev resource group"
-            inputs:
-              azureSubscription: "Web3DevOps"
-              scriptType: "pscore"
-              scriptLocation: "inlineScript"
-              inlineScript: "az group delete --name $(resourceGroup)-dev --yes --no-wait"
-  - stage: qa
-    condition: false
-    dependsOn: dev_validation
-    jobs:
-      - job: iac
-        steps:
-          - checkout: none
-          - download: none
+  #               $logs = az container logs --container ganache `
+  #                 --resource-group $(resourceGroup)-dev `
+  #                 --name $(ganacheName)
 
-          - task: DownloadPipelineArtifact@2
-            displayName: "Download IaC artifacts"
-            inputs:
-              buildType: "current"
-              artifact: "iac"
-              targetPath: "$(Pipeline.Workspace)/iac"
-          - task: AzureCLI@2
-            name: "deploy"
-            displayName: "Deploy Infra"
-            inputs:
-              azureSubscription: "Web3DevOps"
-              scriptType: "pscore"
-              scriptLocation: "scriptPath"
-              scriptPath: "$(Agent.BuildDirectory)/iac/deploy.ps1"
-              arguments: "-repoUrl $(Build.Repository.Uri) -rgName $(resourceGroup)-qa -fqdn '' -verbose"
-              workingDirectory: "$(Agent.BuildDirectory)/iac"
-      - job: deploy_contracts
-        dependsOn: iac
-        steps:
-          - checkout: none
-          - download: none
+  #               Write-Host "logs: $logs"
+  #               # Get first address
+  #               $address = ($logs | Select-String '\(0\) ([^\(]+) \(').Matches.Groups[1].Value
 
-          - task: DownloadPipelineArtifact@2
-            displayName: Download artifacts
+  #               # Get first private key
+  #               $key = ($logs | Select-String '\(0\) ([^\(]{64,})').Matches.Groups[1].Value
 
-          - script: npm install
-            displayName: "Install Truffle"
-            workingDirectory: $(Agent.BuildDirectory)/contracts
+  #               $summaryPath = "$(Agent.BuildDirectory)/contracts/Contract_Information.md"
+  #               $swaUrl = $env:AZURESTATICWEBAPP_STATIC_WEB_APP_URL
+  #               Write-Host "Writing summary to $summaryPath"
 
-          - script: "npx truffle migrate --network rinkeby --reset --compile-none"
-            displayName: Deploy contracts
-            workingDirectory: $(Agent.BuildDirectory)/contracts
-            env:
-              MNEMONIC: $(MNEMONIC)
-              API_KEY: $(API_KEY)
+  #               $data = @"
+  #               ### SPA Information
+  #               App URL: [$swaUrl]($swaUrl)
 
-          - pwsh: |
-              # Load the contract JSON that should have a single network property
-              # after the contract migration above
-              $contract = Get-Content ./client/src/contracts/SimpleStorage.json | ConvertFrom-Json
-              
-              # The networkId is the name of the only property in the networks object
-              $networkId = $contract.networks[0] | Get-Member -MemberType NoteProperty | Select-Object -ExpandProperty name
+  #               ### Contract Information
+  #               Ganache IP: [http://$(ganacheIp):8545](http://$(ganacheIp):8545)
+  #               Ganache FQDN: [http://$(ganacheFqdn):8545](http://$(ganacheFqdn):8545)
+  #               Network ID: $(networkId)
+  #               Contract Address: $(contractAddress)
 
-              # Get the address property
-              $address = $contract.networks.$networkId.address
+  #               ### Account Information
+  #               Address: $address
+  #               Private Key: $key
+  #               "@
 
-              if($address) {
-                Write-Host "##[section]Contract address: $address"
-              } else {
-                Write-Host "##vso[task.logissue type=error]Address not found"
-              }
+  #               Set-Content -Path $summaryPath -Value $data -Verbose
+  #               $cmd = '[task.addattachment type=Distributedtask.Core.Summary;name=dApp Information (Dev);]'
 
-              Write-Host "##vso[task.setvariable variable=networkId;isOutput=true]$networkId"
-              Write-Host "##vso[task.setvariable variable=contractAddress;isOutput=true]$address"
-            displayName: Find contract address
-            name: contract
-            workingDirectory: $(Agent.BuildDirectory)/contracts
-      - job: deploy_frontend
-        dependsOn:
-          - iac
-          - deploy_contracts
-        variables:
-          # map the output variable from build stage into this job
-          swaName: $[ dependencies.IaC.outputs['deploy.swaName'] ]
-          deploymentToken: $[ dependencies.IaC.outputs['deploy.deploymentToken'] ]
-          networkId: $[ dependencies.Deploy_Contracts.outputs['contract.networkId'] ]
-          contractAddress: $[ dependencies.Deploy_Contracts.outputs['contract.contractAddress'] ]
+  #               Write-Host "##vso$cmd$summaryPath"
 
-        steps:
-          - checkout: none
-          - download: none
+  # - stage: dev_validation
+  #   condition: false
+  #   dependsOn: dev
+  #   jobs:
+  #     - job: wait_for_dev_validation
+  #       displayName: "Wait for external validation"
+  #       pool: server
+  #       timeoutInMinutes: 1440 # job times out in 1 day
+  #       steps:
+  #         - task: ManualValidation@0
+  #           timeoutInMinutes: 1440 # task times out in 1 day
+  #           inputs:
+  #             notifyUsers: $(Build.RequestedForEmail)
+  #             instructions: Use the App URL on the Extensions tab and validate the recent changes to your dApp and click resume.
+  #             onTimeout: reject
+  #     - job: delete_dev
+  #       dependsOn: wait_for_dev_validation
+  #       steps:
+  #         - task: AzureCLI@2
+  #           displayName: "Delete Dev resource group"
+  #           inputs:
+  #             azureSubscription: "Web3DevOps"
+  #             scriptType: "pscore"
+  #             scriptLocation: "inlineScript"
+  #             inlineScript: "az group delete --name $(resourceGroup)-dev --yes --no-wait"
 
-          - task: DownloadPipelineArtifact@2
-            displayName: Download artifacts
+  # - stage: qa
+  #   condition: false
+  #   dependsOn: dev_validation
+  #   jobs:
+  #     - job: iac
+  #       steps:
+  #         - checkout: none
+  #         - download: none
 
-          - task: AzureStaticWebApp@0
-            displayName: Deploy frontend
-            inputs:
-              api_location: api
-              app_location: client
-              skip_app_build: true
-              workingDirectory: $(Pipeline.Workspace)
-              azure_static_web_apps_api_token: $(deploymentToken)
+  #         - task: DownloadPipelineArtifact@2
+  #           displayName: "Download IaC artifacts"
+  #           inputs:
+  #             buildType: "current"
+  #             artifact: "iac"
+  #             targetPath: "$(Pipeline.Workspace)/iac"
+  #         - task: AzureCLI@2
+  #           name: "deploy"
+  #           displayName: "Deploy Infra"
+  #           inputs:
+  #             azureSubscription: "Web3DevOps"
+  #             scriptType: "pscore"
+  #             scriptLocation: "scriptPath"
+  #             scriptPath: "$(Agent.BuildDirectory)/iac/deploy.ps1"
+  #             arguments: "-repoUrl $(Build.Repository.Uri) -rgName $(resourceGroup)-qa -fqdn '' -verbose"
+  #             workingDirectory: "$(Agent.BuildDirectory)/iac"
+  #     - job: deploy_contracts
+  #       dependsOn: iac
+  #       steps:
+  #         - checkout: none
+  #         - download: none
 
-          - task: AzureCLI@2
-            displayName: Configure API
-            inputs:
-              azureSubscription: "Web3DevOps"
-              scriptType: "pscore"
-              scriptLocation: "inlineScript"
-              inlineScript: |
-                az staticwebapp appsettings set --name $(swaName) `
-                  --setting-names networkAddress=$(contractAddress) `
-                  networkAddress_$(networkId)=$(contractAddress)
-          - task: AzureCLI@2
-            displayName: "Update summary"
-            inputs:
-              azureSubscription: "Web3DevOps"
-              scriptType: "pscore"
-              scriptLocation: "inlineScript"
-              inlineScript: |
-                dir env: | Out-String
-                
-                Write-Host "resourceGroup: $(resourceGroup)"
+  #         - task: DownloadPipelineArtifact@2
+  #           displayName: Download artifacts
 
-                $summaryPath = "$(Agent.BuildDirectory)/contracts/QA_Contract_Information.md"
-                $swaUrl = $env:AZURESTATICWEBAPP_STATIC_WEB_APP_URL
-                Write-Host "Writing summary to $summaryPath"
+  #         - script: npm install
+  #           displayName: "Install Truffle"
+  #           workingDirectory: $(Agent.BuildDirectory)/contracts
 
-                $data = @"
-                ### SPA Information
-                App URL: [$swaUrl]($swaUrl)
+  #         - script: "npx truffle migrate --network rinkeby --reset --compile-none"
+  #           displayName: Deploy contracts
+  #           workingDirectory: $(Agent.BuildDirectory)/contracts
+  #           env:
+  #             MNEMONIC: $(MNEMONIC)
+  #             API_KEY: $(API_KEY)
 
-                ### Contract Information
-                Network ID: $(networkId)
-                Contract Address: $(contractAddress)
-                "@
+  #         - pwsh: |
+  #             # Load the contract JSON that should have a single network property
+  #             # after the contract migration above
+  #             $contract = Get-Content ./client/src/contracts/SimpleStorage.json | ConvertFrom-Json
 
-                Set-Content -Path $summaryPath -Value $data -Verbose
-                $cmd = '[task.addattachment type=Distributedtask.Core.Summary;name=dApp Information (QA);]'
+  #             # The networkId is the name of the only property in the networks object
+  #             $networkId = $contract.networks[0] | Get-Member -MemberType NoteProperty | Select-Object -ExpandProperty name
 
-                Write-Host "##vso$cmd$summaryPath"
-  
-  - stage: qa_validation
-    condition: false
-    dependsOn: qa
-    jobs:
-      - job: wait_for_qa_validation
-        displayName: "Wait for external validation"
-        pool: server
-        timeoutInMinutes: 1440 # job times out in 1 day
-        steps:
-          - task: ManualValidation@0
-            timeoutInMinutes: 1440 # task times out in 1 day
-            inputs:
-              notifyUsers: $(Build.RequestedForEmail)
-              instructions: Use the App URL on the Extensions tab and validate the recent changes to your dApp and click resume.
-              onTimeout: reject
-      - job: delete_qa
-        dependsOn: wait_for_qa_validation
-        steps:
-          - task: AzureCLI@2
-            displayName: "Delete QA resource group"
-            inputs:
-              azureSubscription: "Web3DevOps"
-              scriptType: "pscore"
-              scriptLocation: "inlineScript"
-              inlineScript: "az group delete --name $(resourceGroup)-qa --yes --no-wait"
+  #             # Get the address property
+  #             $address = $contract.networks.$networkId.address
+
+  #             if($address) {
+  #               Write-Host "##[section]Contract address: $address"
+  #             } else {
+  #               Write-Host "##vso[task.logissue type=error]Address not found"
+  #             }
+
+  #             Write-Host "##vso[task.setvariable variable=networkId;isOutput=true]$networkId"
+  #             Write-Host "##vso[task.setvariable variable=contractAddress;isOutput=true]$address"
+  #           displayName: Find contract address
+  #           name: contract
+  #           workingDirectory: $(Agent.BuildDirectory)/contracts
+  #     - job: deploy_frontend
+  #       dependsOn:
+  #         - iac
+  #         - deploy_contracts
+  #       variables:
+  #         # map the output variable from build stage into this job
+  #         swaName: $[ dependencies.IaC.outputs['deploy.swaName'] ]
+  #         deploymentToken: $[ dependencies.IaC.outputs['deploy.deploymentToken'] ]
+  #         networkId: $[ dependencies.Deploy_Contracts.outputs['contract.networkId'] ]
+  #         contractAddress: $[ dependencies.Deploy_Contracts.outputs['contract.contractAddress'] ]
+
+  #       steps:
+  #         - checkout: none
+  #         - download: none
+
+  #         - task: DownloadPipelineArtifact@2
+  #           displayName: Download artifacts
+
+  #         - task: AzureStaticWebApp@0
+  #           displayName: Deploy frontend
+  #           inputs:
+  #             api_location: api
+  #             app_location: client
+  #             skip_app_build: true
+  #             workingDirectory: $(Pipeline.Workspace)
+  #             azure_static_web_apps_api_token: $(deploymentToken)
+
+  #         - task: AzureCLI@2
+  #           displayName: Configure API
+  #           inputs:
+  #             azureSubscription: "Web3DevOps"
+  #             scriptType: "pscore"
+  #             scriptLocation: "inlineScript"
+  #             inlineScript: |
+  #               az staticwebapp appsettings set --name $(swaName) `
+  #                 --setting-names networkAddress=$(contractAddress) `
+  #                 networkAddress_$(networkId)=$(contractAddress)
+  #         - task: AzureCLI@2
+  #           displayName: "Update summary"
+  #           inputs:
+  #             azureSubscription: "Web3DevOps"
+  #             scriptType: "pscore"
+  #             scriptLocation: "inlineScript"
+  #             inlineScript: |
+  #               dir env: | Out-String
+
+  #               Write-Host "resourceGroup: $(resourceGroup)"
+
+  #               $summaryPath = "$(Agent.BuildDirectory)/contracts/QA_Contract_Information.md"
+  #               $swaUrl = $env:AZURESTATICWEBAPP_STATIC_WEB_APP_URL
+  #               Write-Host "Writing summary to $summaryPath"
+
+  #               $data = @"
+  #               ### SPA Information
+  #               App URL: [$swaUrl]($swaUrl)
+
+  #               ### Contract Information
+  #               Network ID: $(networkId)
+  #               Contract Address: $(contractAddress)
+  #               "@
+
+  #               Set-Content -Path $summaryPath -Value $data -Verbose
+  #               $cmd = '[task.addattachment type=Distributedtask.Core.Summary;name=dApp Information (QA);]'
+
+  #               Write-Host "##vso$cmd$summaryPath"
+
+  # - stage: qa_validation
+  #   condition: false
+  #   dependsOn: qa
+  #   jobs:
+  #     - job: wait_for_qa_validation
+  #       displayName: "Wait for external validation"
+  #       pool: server
+  #       timeoutInMinutes: 1440 # job times out in 1 day
+  #       steps:
+  #         - task: ManualValidation@0
+  #           timeoutInMinutes: 1440 # task times out in 1 day
+  #           inputs:
+  #             notifyUsers: $(Build.RequestedForEmail)
+  #             instructions: Use the App URL on the Extensions tab and validate the recent changes to your dApp and click resume.
+  #             onTimeout: reject
+  #     - job: delete_qa
+  #       dependsOn: wait_for_qa_validation
+  #       steps:
+  #         - task: AzureCLI@2
+  #           displayName: "Delete QA resource group"
+  #           inputs:
+  #             azureSubscription: "Web3DevOps"
+  #             scriptType: "pscore"
+  #             scriptLocation: "inlineScript"
+  #             inlineScript: "az group delete --name $(resourceGroup)-qa --yes --no-wait"
+
   - stage: prod
     # dependsOn: qa_validation
     jobs:
@@ -511,7 +514,7 @@ stages:
               # Load the contract JSON that should have a single network property
               # after the contract migration above
               $contract = Get-Content ./client/src/contracts/SimpleStorage.json | ConvertFrom-Json
-              
+
               # The networkId is the name of the only property in the networks object
               $networkId = $contract.networks[0] | Get-Member -MemberType NoteProperty | Select-Object -ExpandProperty name
 
@@ -574,7 +577,7 @@ stages:
               scriptLocation: "inlineScript"
               inlineScript: |
                 dir env: | Out-String
-                
+
                 Write-Host "resourceGroup: $(resourceGroup)"
 
                 $summaryPath = "$(Agent.BuildDirectory)/contracts/Prod_Contract_Information.md"
@@ -594,4 +597,3 @@ stages:
                 $cmd = '[task.addattachment type=Distributedtask.Core.Summary;name=dApp Information (Prod);]'
 
                 Write-Host "##vso$cmd$summaryPath"
-
