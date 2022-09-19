@@ -463,7 +463,7 @@ stages:
               inlineScript: "az group delete --name $(resourceGroup)-qa --yes --no-wait"
 
   - stage: prod
-    # dependsOn: qa_validation
+    dependsOn: qa_validation
     jobs:
       - job: iac
         steps:
