@@ -10,6 +10,15 @@ config = {
   // to customize your Truffle configuration!
   contracts_build_directory: path.join(__dirname, "client/src/contracts"),
   networks: {
+    mainnet: {
+      host: "localhost",
+      provider: function () {
+        return new HDWalletProvider(mnemonic, "https://mainnet.infura.io/v3/" + apiKey);
+      },
+      network_id: 4,
+      gas: 6700000,
+      gasPrice: 10000000000
+    },
     rinkeby: {
       host: "localhost",
       provider: function () {
