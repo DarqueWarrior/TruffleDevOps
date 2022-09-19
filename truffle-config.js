@@ -15,7 +15,7 @@ config = {
       provider: function () {
         return new HDWalletProvider(mnemonic, "https://mainnet.infura.io/v3/" + apiKey);
       },
-      network_id: 4,
+      network_id: 1,
       gas: 6700000,
       gasPrice: 10000000000
     },
